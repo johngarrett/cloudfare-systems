@@ -1,4 +1,4 @@
-#include <string>
+#include "ping.h"
 #include <arpa/inet.h>
 #include <sys/socket.h>
 /**
@@ -19,34 +19,32 @@
 #include <netdb.h>
 #include <unistd.h> // for closing sockets
 
-// TODO: reimpliment
- int32_t checksum(uint16_t *buf, int32_t len)
-        {
-            int32_t nleft = len;
-            int32_t sum = 0;
-            uint16_t *w = buf;
-            uint16_t answer = 0;
+ int32_t ping::checksum(uint16_t *buf, int32_t len) {
+    int32_t nleft = len;
+    int32_t sum = 0;
+    uint16_t *w = buf;
+    uint16_t answer = 0;
 
-            while(nleft > 1)
-            {
-                sum += *w++;
-                nleft -= 2;
-            }
+    while(nleft > 1)
+    {
+        sum += *w++;
+        nleft -= 2;
+    }
 
-            if(nleft == 1)
-            {
-                *(uint16_t *)(&answer) = *(uint8_t *)w;
-                sum += answer;
-            }
+    if(nleft == 1)
+    {
+        *(uint16_t *)(&answer) = *(uint8_t *)w;
+        sum += answer;
+    }
 
-            sum = (sum >> 16) + (sum & 0xFFFF);
-            sum += (sum >> 16);
-            answer = ~sum;
+    sum = (sum >> 16) + (sum & 0xFFFF);
+    sum += (sum >> 16);
+    answer = ~sum;
 
-            return answer;
-        }
-
-int main(int argc, char* argv[]) {
+    return answer;
+}
+void ping::start_ping(std::string _host) {
+             
     /*
      * domain = 
      *   AF_INET for ipv4
@@ -56,12 +54,12 @@ int main(int argc, char* argv[]) {
      * protocol = same number that appears on the protocol field in the IP header
      *   for ipv4, this number is 0
      */
+
     int sock = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP);
 
     if (sock < 0) { // an error occured
-        std::cout << "couldnt make socket, run as root(?)" << "\n";
         close(sock);
-        return -1;
+        throw std::runtime_error(" couldnt make socket, run as root(?)");
     }
 
     /*
@@ -82,7 +80,6 @@ int main(int argc, char* argv[]) {
      *TODO: remove this, i think its just getting the current machine's ip address in a really complicated way
      * or, its a way to verify the destination (i think this is more correct)
      */
-    std::string _host = argv[1]; // TODO: sanatize
     std::cout << _host << "\n";
 
     hostent *h = gethostbyname(_host.c_str());
@@ -125,7 +122,7 @@ int main(int argc, char* argv[]) {
      */
     if(setsockopt(sock, SOL_RAW, ICMP_FILTER, (char *)&filter, sizeof(filter)) < 0) {
         std::cout << "couldn't set socket options... dont know why";
-        return -1;
+        throw std::runtime_error(" ");
     }
 
     // number of valid echo receptions (?)
@@ -151,14 +148,14 @@ int main(int argc, char* argv[]) {
         if (bytes < 0) {
             std::cout << "the sendto command returned " << bytes << "... we cant send to reciver";
             close(sock);
-            return -1;
+            throw std::runtime_error(" ");
         }
 
         else if (bytes != sizeof(packet)) {
             std::cout << "We couldn't write the whole package..\n";
             std::cout << bytes <<"\t versus expect size of: " << sizeof(packet);
             close(sock);
-            return -1;
+            throw std::runtime_error(" ");
         }
 
 
@@ -172,7 +169,7 @@ int main(int argc, char* argv[]) {
 
             if (bytes < 0) {
                 std::cout << "ERROR ON RECVFROM, bytes found: " << bytes;
-                return -1;
+                throw std::runtime_error(" ");
             }
 
             else {
@@ -217,8 +214,8 @@ int main(int argc, char* argv[]) {
                 }
             }
         }
+        }
 
         std::cout << "we recived " << nrec << " packets back";
     }
-    return 0;
-}
+

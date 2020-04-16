@@ -1,15 +1,8 @@
-#include "Ping.h"
+#include <string>
+#include "ping.h"
 
-
-void parse_agrs();
-void help_menu();   
-
-int main()
-{
-    Ping::ping("192.168.1.1");
-    /*
-    std::string address = "192.168.2.1";
-    Ping::ping(address, type=.IPV6, size=64, ...);
-    */
+int main(int argc, char* argv[]) {
+    std::string _host = argv[1]; // TODO: sanatize
+    ping::start_ping(_host);
     return 0;
 }
