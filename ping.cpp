@@ -43,6 +43,7 @@
 
     return answer;
 }
+
 void ping::start_ping(std::string _host) {
              
     /*
@@ -125,97 +126,100 @@ void ping::start_ping(std::string _host) {
         throw std::runtime_error(" ");
     }
 
-    // number of valid echo receptions (?)
-    int nrec = 0;
+    unsigned short num_recieved = 0;
 
     // SEDING THE PACKET!!!
     for (int i = 0; i < 5; i++) {
         std::cout << "attempting ping #" << i+1 << "\n";
+        send_imcp_echo_packet(sock, pingaddr, i, pid);
+        num_recieved += listen_for_reply(sock, pingaddr, pid);
+    }
+    std::cout << "we recived " << num_recieved << " packets back";
+}
 
-        char packet[sizeof(icmphdr)];
-        memset(packet, 0, sizeof(packet)); // fill with zeros to ensure no corruption or anything
-        
-        icmphdr *pkt = (icmphdr *)packet; // everything inside icmphdr is an int or struct of ints
-        pkt->type = ICMP_ECHO; // ICMP ECHO for out, ICMP_ECHO_REPLY will come back to us
-        pkt->code = 0; // code 0 = echo reply/req
-        pkt->checksum = 0; // TODO: see if we can remove this
-        pkt->un.echo.id = htons(pid & 0xFFFF); // htons converts the unsigned integer hostlong to network bye order
-        pkt->un.echo.sequence = i; 
-        pkt->checksum = checksum((uint16_t *) pkt, sizeof(packet));
+void ping::send_imcp_echo_packet(int sock, sockaddr_in pingaddr, unsigned short seq, unsigned short id) {
+    char packet[sizeof(icmphdr)];
+    memset(packet, 0, sizeof(packet)); // fill with zeros to ensure no corruption or anything
+    
+    icmphdr *pkt = (icmphdr *)packet; // everything inside icmphdr is an int or struct of ints
+    pkt->type = ICMP_ECHO; // ICMP ECHO for out, ICMP_ECHO_REPLY will come back to us
+    pkt->code = 0; // code 0 = echo reply/req
+    pkt->un.echo.id = htons(id & 0xFFFF); // htons converts the unsigned integer hostlong to network bye order
+    pkt->un.echo.sequence = seq; 
+    pkt->checksum = checksum((uint16_t *) pkt, sizeof(packet));
+    //pkt->checksum = 0;
 
-        int bytes = sendto(sock, packet, sizeof(packet), 0 /*flags*/, (sockaddr *)&pingaddr, sizeof(sockaddr_in));
+    int bytes = sendto(sock, packet, sizeof(packet), 0 /*flags*/, (sockaddr *)&pingaddr, sizeof(sockaddr_in));
 
-        if (bytes < 0) {
-            std::cout << "the sendto command returned " << bytes << "... we cant send to reciver";
-            close(sock);
-            throw std::runtime_error(" ");
-        }
+    if (bytes < 0) {
+        std::cout << "the sendto command returned " << bytes << "... we cant send to reciver";
+        close(sock);
+        throw std::runtime_error(" ");
+    }
 
-        else if (bytes != sizeof(packet)) {
-            std::cout << "We couldn't write the whole package..\n";
-            std::cout << bytes <<"\t versus expect size of: " << sizeof(packet);
-            close(sock);
-            throw std::runtime_error(" ");
-        }
+    else if (bytes != sizeof(packet)) {
+        std::cout << "We couldn't write the whole package..\n";
+        std::cout << bytes <<"\t versus expect size of: " << sizeof(packet);
+        close(sock);
+        throw std::runtime_error(" ");
+    }
+}
 
 
-        // if we reach this, everything is peaches and creams and applesauce
-        while(1) {
+unsigned short ping::listen_for_reply(int sock, sockaddr_in pingaddr, unsigned short id) {
+    while (1) {
             char inbuf[192]; // TODO: find out what this 192 is
             memset(inbuf, 0, sizeof(inbuf));
             
             int addrlen = sizeof(sockaddr_in);
-            bytes = recvfrom(sock, inbuf /*buffer to save the bytes*/, sizeof(inbuf), 0 /*flags*/, (sockaddr *)&pingaddr, (socklen_t *)&addrlen);
+            int bytes = recvfrom(sock, inbuf /*buffer to save the bytes*/, sizeof(inbuf), 0 /*flags*/, (sockaddr *) &pingaddr, (socklen_t *)&addrlen);
+            //int bytes = recv(sock, inbuf /*buffer to save the bytes*/, sizeof(inbuf), 0 /*flags*/); //, (sockaddr *) &pingaddr, (socklen_t *)&addrlen);
 
             if (bytes < 0) {
-                std::cout << "ERROR ON RECVFROM, bytes found: " << bytes;
-                throw std::runtime_error(" ");
+                std::cout << "[LISTEN] bytes found: " << bytes << "\n\twe expect a value > 0... continuing\n";
+                continue;
             }
 
             else {
                 if (bytes < sizeof(iphdr) + sizeof(icmphdr)) { // we're getting back an icmphdr wrapped in an ip header TODO cehck
-                    std::cout << "Incorrect read bytes!\n we're going to try and continue\n";
+                    std::cout << "[LISTEN] Incorrect read bytes!\n\t... continuing\n";
                 }
 
                 iphdr *iph = (iphdr *)inbuf;
-                int hlen = (iph->ihl << 2); // wtf are we doing here? figure it out scott
+                int hlen = (iph->ihl << 2); // shift left 2
                 bytes -= hlen; // subtract the ip header from the bytes, we only care about the icmp info
                 
-                pkt = (icmphdr *)(inbuf + hlen); // at this point, inbuf + hlen points to the icmp header
-                int id = ntohs(pkt->un.echo.id); // converts unsigned int from network to host byte order (opposite of the htons we did earlier! ish)
+                icmphdr *pkt = (icmphdr *)(inbuf + hlen); // at this point, inbuf + hlen points to the icmp header
+                int extracted_id = ntohs(pkt->un.echo.id); // converts unsigned int from network to host byte order (opposite of the htons we did earlier! ish)
                 if (pkt->type == ICMP_ECHOREPLY) {
                     std::cout << "WE found an IMCP ECHO REPLY!\n";
-                    if (id == pid) {
+                    if (extracted_id == id) {
                         std::cout << "The pid's matched!\n";
-                        nrec++; // we reciverd another packer
-                        if (i < 5) break; // we found our packet
+                        return 1;
                     }
                     else {
-                        std::cout << "the pid's did not match.\t " << pid << "is what we want, " << id << "is what we found\n";
+                        std::cout << "the pid's did not match.\t " << id << "is what we want, " << extracted_id << "is what we found\n";
+                        return 0;
                     }
                 }
                 else if (pkt->type == ICMP_DEST_UNREACH) {
-                    std::cout << "ICMP DEST UNREACHABLE??\n";
+                    std::cout << "[LISTEN] packet type of ICMP_DEST_UNREACH\n";
 
                     int offset = sizeof(iphdr) + sizeof(icmphdr) + sizeof(iphdr); // iphdr + icmp hdr going out + another iphdr coming back in? TODO
                     if (((bytes + hlen) - offset) == sizeof(icmphdr))
                     {
                         icmphdr *p = reinterpret_cast<icmphdr *>(inbuf + offset); // extract the original icmp packet
-                        id = ntohs(p->un.echo.id);
-                        if (id == pid) {
-                            std::cout << "ID's match, the host we were trying to reach is unreachable... sorry\n";
-                            break;
+                        if (ntohs(p->un.echo.id) == id) {
+                            std::cout << "\tID's match, destination is unreachable\n";
+                            return 0;
                         }
-
                     }
                 }
                 else {
-                    std::cout << "we got a packet back but it wasnt a reply or an unreachable error...\n";
+                    std::cout << "[LISTEN] we got a packet back but it wasnt a reply or an unreachable error...\n";
+                    return 0;
                 }
             }
         }
-        }
-
-        std::cout << "we recived " << nrec << " packets back";
-    }
+}
 
