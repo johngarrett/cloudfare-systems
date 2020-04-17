@@ -7,12 +7,13 @@ int main(int argc, char* argv[]) {
 
     options.add_options()
         ("a,audio", "audible ping", cxxopts::value<bool>()->default_value("false"))
-        ("c,count","the amount of ping packets to send", cxxopts::value<unsigned int>())
-        ("t,timestamps", "print time stamps", cxxopts::value<bool>()->default_value("true"))
+        ("c,count","the amount of ping packets to send", cxxopts::value<unsigned int>()->default_value("5"))
+        ("T,timestamps", "print time stamps", cxxopts::value<bool>()->default_value("true"))
         ("h,help", "display the help menu")
         ("q,quiet", "only show output summary", cxxopts::value<bool>()->default_value("false"))
         ("v,verbose", "print all the information we can", cxxopts::value<bool>()->default_value("false"))
-        ("s,size", "set the packet size to send", cxxopts::value<unsigned int>());
+        ("s,size", "set the packet size to send", cxxopts::value<unsigned int>()->default_value("64"))
+        ("t,ttl", "set the IP Time to Live", cxxopts::value<unsigned int>()->default_value("255"));
 
     auto result = options.parse(argc, argv);
 
@@ -28,8 +29,15 @@ int main(int argc, char* argv[]) {
         exit(0);
     }
     
-    ping::Parameters p; 
-    ping::start_ping(lastArg);
+    ping::Parameters p{ result["audio"].as<bool>(),
+                        result["quiet"].as<bool>(),
+                        result["verbose"].as<bool>(),
+                        result["timestamps"].as<bool>(),
+                        result["count"].as<unsigned int>(),
+                        result["size"].as<unsigned int>(),
+                        result["ttl"].as<unsigned int>()};
+    
+    ping::start_ping(lastArg, p);
     return 0;
 }
 

@@ -7,19 +7,32 @@
 #include <netinet/icmp6.h>
 
 #include <iostream>
+#include <iomanip>
 #include <errno.h>
 
-void ping::start_ping(std::string destination) {
+void ping::start_ping(const std::string&  destination, const Parameters& p) {
     int pid = getpid();
     while (pid/ 100000 != 0) pid /= 10;
-    std::cout << " the pid is " << pid << "\n";
+    if (p.verbose) std::cout << " the pid is " << pid << "\n";
     setuid(getuid());
          
     Destination d{destination};
-    ping_destination(d, pid);
+    PingResults results{ping_destination(d, p, pid)};
+
+     // TODO: print summary here
+    /*
+     * for ping:
+    --- google.com ping statistics ---
+    3 packets transmitted, 3 received, 0% packet loss, time 2002ms
+    rtt min/avg/max/mdev = 32.528/33.572/34.641/0.862 ms
+     */
+    std::cout << "\t" << destination << " ping stats \t\n";
+    std::cout << results.num_sent << " ICMP echo request packets sent, " << results.num_recv << " ICMP echo reply packets recieved.\n";
+    std::cout << std::setw(2) << float(results.num_sent - results.num_recv) / float(results.num_sent) * 100 << "% packet loss.\n";
+    std::cout << "Total time: " << std::setw(2) << results.total_time_ms << "ms, avg rtt: " << std::setw(4) << results.avg_rtt << "\n";
 }
 
-void ping::ping_destination(const Destination& destination, unsigned short id) {
+ping::PingResults ping::ping_destination(const Destination& destination, const Parameters& p, unsigned short id) {
     int sock;
     if (destination.type == IPV6) {
         sock = socket(AF_INET6, SOCK_RAW, IPPROTO_ICMPV6); // protocol (the number that appears in the header (ECHO REPLY/REQ))
@@ -50,19 +63,21 @@ void ping::ping_destination(const Destination& destination, unsigned short id) {
 
     unsigned short num_recieved = 0;
 
-        for (int i = 0; i < 5; i++) {
-            std::cout << "attempting ping #" << i+1 << "\n";
-            send_imcp_echo_packet(destination, sock, i, id);
-            num_recieved += listen_for_reply(destination, sock, id);
-        }
-        std::cout << "we recived " << num_recieved << " packets back";
+    for (int i = 0; i < 5; i++) {
+        if (!p.quiet) std::cout << "attempting ping #" << i+1 << "\n";
+        // time start
+        send_imcp_echo_packet(destination, p, sock, i, id);
+        num_recieved += listen_for_reply(destination, p, sock, id);
+        // time end
+    }
 
+    return PingResults{p.packet_quantity, num_recieved,0,0};
 }
 
-void ping::send_imcp_echo_packet(const Destination& d, int sock, unsigned short seq, unsigned short id) {
+void ping::send_imcp_echo_packet(const Destination& d, const Parameters& p, int sock, unsigned short seq, unsigned short id) {
     char packet[d.type == IPV6 ? sizeof(icmp6_hdr) : sizeof(icmphdr)];
     memset(packet, 0, sizeof(packet)); // fill with zeros to ensure no corruption or anything
-    std::cout << "Type is " << d.type << " so we are using a packet sizeof " << (d.type == IPV6 ? sizeof(icmp6_hdr) : sizeof(icmphdr)) << "\n";
+    if (p.verbose) std::cout << "Type is " << d.type << " so we are using a packet sizeof " << (d.type == IPV6 ? sizeof(icmp6_hdr) : sizeof(icmphdr)) << "\n";
 
     if (d.type == IPV6) {
         icmp6_hdr *pkt = (icmp6_hdr *)packet; // everything inside icmp6_hdr is an int or struct of ints
@@ -79,6 +94,10 @@ void ping::send_imcp_echo_packet(const Destination& d, int sock, unsigned short 
        pkt->un.echo.sequence = seq;
        pkt->checksum = checksum((uint16_t *) pkt, sizeof(packet));// checksum(d);
     }
+    
+    if(p.verbose) {
+        //print packet contents
+    }
 
     int bytes = sendto(sock, packet, sizeof(packet), 0 /*flags*/, d.get_sock_addr(), d.type == IPV6 ? sizeof(sockaddr_in6) : sizeof(sockaddr_in));
 
@@ -91,7 +110,7 @@ void ping::send_imcp_echo_packet(const Destination& d, int sock, unsigned short 
    }
 }
 
-unsigned short ping::listen_for_reply(const Destination& d, int sock, unsigned short id) {
+unsigned short ping::listen_for_reply(const Destination& d, const Parameters& p, int sock, unsigned short id) {
     while (1) {
             char inbuf[192]; // 100 is an arbitary size, big enough to store a common echo  packet
             memset(inbuf, 0, sizeof(inbuf));
@@ -100,32 +119,32 @@ unsigned short ping::listen_for_reply(const Destination& d, int sock, unsigned s
             int bytes = recvfrom(sock, inbuf /*buffer to save the bytes*/, sizeof(inbuf), 0 /*flags*/, d.get_sock_addr(), (socklen_t *)&addrlen);
 
             if (bytes < 0) {
-                std::cout << "[LISTEN] bytes found: " << bytes << "\n\twe expect a value > 0... continuing\n";
+                if (p.verbose) std::cout << "[LISTEN] bytes found: " << bytes << "\n\twe expect a value > 0... continuing\n";
                 continue;
             }
 
             if (bytes < (d.type == IPV6 ? sizeof(icmp6_hdr) : (sizeof(iphdr) + sizeof(icmphdr)))) { 
-                std::cout << "[LISTEN] Incorrect read bytes! For type " << d.type << "\n\t... continuing\n";
+                if (p.verbose) std::cout << "[LISTEN] Incorrect read bytes! For type " << d.type << "\n\t... continuing\n";
             }
 
             if (d.type == IPV6) {
                 ip6_hdr *iph = (ip6_hdr *)inbuf;  // headerlength is automtically cropped out?????????? 
-                icmp6_hdr *pkt = (icmp6_hdr *)(inbuf ); // at this point, inbuf + hlen points to the icmp header
+                icmp6_hdr *pkt = (icmp6_hdr *)(inbuf); // at this point, inbuf + hlen points to the icmp header
                 int extracted_id = ntohs(pkt->icmp6_id); // converts unsigned int from network to destination byte order (opposite of the htons we did earlier! ish)
 
                 if (pkt->icmp6_type == ICMP6_ECHO_REPLY) {
-                    std::cout << "WE found an IMCP ECHO REPLY!\n";
-                    std::cout << "packet id: " << extracted_id << "\nexpected id: " << id << "\npacket contents: " << pkt->icmp6_dataun.icmp6_un_data32 << "\n";
+                    if (p.verbose) std::cout << "[LISTEN] packet type of ICMP6 Echo Reply found.\n";
+                    if (p.verbose) std::cout << "packet id: " << extracted_id << "\nexpected id: " << id << "\npacket checksum: " << pkt->icmp6_cksum << "\n";
                     return (extracted_id == id);
                 } else if (pkt->icmp6_type == ICMP6_DST_UNREACH) {
-                    std::cout << "[LISTEN] packet type of ICMP6_DEST_UNREACH\n";
+                    if (p.verbose) std::cout << "[LISTEN] packet type of ICMP6_DEST_UNREACH\n";
 
                     int offset = sizeof(ip6_hdr) + sizeof(icmp6_hdr) + sizeof(ip6_hdr); // ip6_hdr + icmp hdr going out + another ip6_hdr coming back in? TODO
                     if (((bytes) - offset) == sizeof(icmp6_hdr))
                     {
-                        icmp6_hdr *p = reinterpret_cast<icmp6_hdr *>(inbuf + offset); // extract the original icmp packet
-                        if (ntohs(p->icmp6_id) == id) {
-                            std::cout << "\tID's match, destination is unreachable\n";
+                        icmp6_hdr *packet = reinterpret_cast<icmp6_hdr *>(inbuf + offset); // extract the original icmp packet
+                        if (ntohs(packet->icmp6_id) == id) {
+                            if (p.verbose) std::cout << "\tID's match, destination is unreachable\n";
                             return 0;
                         }
                     }
@@ -138,8 +157,8 @@ unsigned short ping::listen_for_reply(const Destination& d, int sock, unsigned s
                 int extracted_id = ntohs(pkt->un.echo.id); // converts unsigned int from network to host byte order (opposite of the htons we did earlier! ish)
 
                 if (pkt->type == ICMP_ECHOREPLY) {
-                    std::cout << "WE found an IMCP ECHO REPLY!\n";
-                    std::cout << "packet id: " << extracted_id << "\nexpected id: " << id << "\npacket contents: " << pkt->un.frag.mtu << "\n";
+                    if (p.verbose) std::cout << "[LISTEN] packet type of ICMP Echo Rely found.\n";
+                    if (p.verbose) std::cout << "packet id: " << extracted_id << "\nexpected id: " << id << "\npacket checksum: " << pkt->checksum << "\n";
                     return (extracted_id == id);
                 }                
                 else if (pkt->type == ICMP_DEST_UNREACH) {
@@ -161,7 +180,7 @@ unsigned short ping::listen_for_reply(const Destination& d, int sock, unsigned s
         }
 }
 
-int32_t ping::checksum(const Destination& d) {
+int32_t ping::checksum(const Destination& d, const Parameters& p) {
     /** TODO: chksm for icmpv6 and icmp4 (they differ)
     int32_t nleft = len;
     int32_t sum = 0;

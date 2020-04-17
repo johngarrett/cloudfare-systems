@@ -8,15 +8,16 @@
 class ping
 {
     public:
-        static void start_ping(std::string destination);
         struct Parameters {
-            bool make_sound;
-            bool quiet;
-            bool verbose;
-            bool show_timestamps;
-            unsigned int packet_quantity;
-            unsigned int packet_size;
+            bool make_sound = false;
+            bool quiet = false;
+            bool verbose = false;
+            bool show_timestamps = true;
+            unsigned int packet_quantity = 5;
+            unsigned int packet_size = 64; 
+            unsigned int ttl = 255;
         };
+        static void start_ping(const std::string& destination, const Parameters& p);
     private:
         enum protocol { IPV4, IPV6 };
         struct Destination {
@@ -42,9 +43,16 @@ class ping
                 struct sockaddr_in6 addr;
         };
 
-        static int32_t checksum(const Destination& d);
-        static void ping_destination(const Destination& d, unsigned short id);
-        static void send_imcp_echo_packet(const Destination& d, int sock, unsigned short, unsigned short);
+        struct PingResults {
+            unsigned int num_sent;
+            unsigned int num_recv;
+            float total_time_ms;
+            float avg_rtt;
+        };
+
+        static int32_t checksum(const Destination& d, const Parameters& p);
+        static PingResults ping_destination(const Destination& d, const Parameters& p, unsigned short id);
+        static void send_imcp_echo_packet(const Destination& d, const Parameters& p, int sock, unsigned short, unsigned short);
         /**
          * listen for reply on one packet
          *
@@ -54,7 +62,6 @@ class ping
          * @param pingaddr the address to recieve packets from
          * @param id the id attached to all outgoing packets
          */
-        static unsigned short listen_for_reply(const Destination& d, int sock, unsigned short id);
-                static int32_t checksum(uint16_t *buf, int32_t len);
-
+        static unsigned short listen_for_reply(const Destination& d, const Parameters& p, int sock, unsigned short id);
+        static int32_t checksum(uint16_t *buf, int32_t len);
 };
