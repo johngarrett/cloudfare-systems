@@ -1,16 +1,17 @@
 #include <string>
-#include "ping.h"
-#include "cxxopts.hpp"
+#include "ping.hpp"
+#include "include/cxxopts.hpp"
 
 int main(int argc, char* argv[]) {
     cxxopts::Options options(argv[0]);
 
     options.add_options()
         ("a,audio", "audible ping", cxxopts::value<bool>()->default_value("false"))
-        ("c,count","the amount of ping packets to send", cxxopts::value<std::string>())
+        ("c,count","the amount of ping packets to send", cxxopts::value<unsigned int>())
         ("t,timestamps", "print time stamps", cxxopts::value<bool>()->default_value("true"))
         ("h,help", "display the help menu")
-        ("q,quiet", "only show output summary", cxxopts::value<bool>()->default_value("true"))
+        ("q,quiet", "only show output summary", cxxopts::value<bool>()->default_value("false"))
+        ("v,verbose", "print all the information we can", cxxopts::value<bool>()->default_value("false"))
         ("s,size", "set the packet size to send", cxxopts::value<unsigned int>());
 
     auto result = options.parse(argc, argv);
@@ -27,8 +28,8 @@ int main(int argc, char* argv[]) {
         exit(0);
     }
     
-  //  std::string _host = argv[1]; // TODO: sanatize
-   // ping::start_ping(_host);
+    ping::Parameters p; 
+    ping::start_ping(lastArg);
     return 0;
 }
 
