@@ -13,9 +13,10 @@ class ping
             bool quiet = false;
             bool verbose = false;
             bool show_timestamps = true;
-            unsigned int packet_quantity = 5;
+            int packet_quantity = -1;
             unsigned int packet_size = 64; 
-            unsigned int ttl = 255;
+            int ttl = 255;
+            unsigned short delay = 1;
         };
         static void start_ping(const std::string& destination, const Parameters& p);
     private:
@@ -44,13 +45,14 @@ class ping
         };
 
         struct PingResults {
-            unsigned int num_sent;
-            unsigned int num_recv;
+            unsigned short num_sent;
+            unsigned short num_recv;
             float total_time_ms;
             float avg_rtt;
         };
 
         static int32_t checksum(const Destination& d, const Parameters& p);
+        static void generateICMPHeader(char* buffer, int packet_size, int id, int seq, protocol type);
         static PingResults ping_destination(const Destination& d, const Parameters& p, unsigned short id);
         static void send_imcp_echo_packet(const Destination& d, const Parameters& p, int sock, unsigned short, unsigned short);
         /**

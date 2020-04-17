@@ -20,22 +20,27 @@
     - `-q` queit, only show output at the end
     - `-p` packet size
     - `-V` version
-
 ---
 ## status
 - [X] ping ipv4 hosts
 - [X] listen for and filter responses
 - [X] support ipv6
-- [ ] command line
-    - [ ] sanitization
-    - [ ] show help logs
-    - [ ] -a support
-    - [ ] -c support
-    - [ ] -D time stamp support
-    - [ ] -V version
+- [X] command line
+    - [X] sanitization
+    - [X] show help logs
+    = [X] -q quiet
 - ~~[ ] #ifdef if `<linux/icmp.h>` and `<linux/in.h>` are avaliable, `<netinet/ip_icmp.h>` if not~~
-- [ ] ncurses support ??
+- ~~[ ] ncurses support ??~~
 - [X] fix pid issue
 - [X] fix sendto and recvfrom
 - [X] reduce use of cstrings
-- [ ] init structs inline
+- [ ] conform to c++ conventions (camel case)
+- [ ] add data to packets
+- [ ] impliment ttl for ipv6 packets
+- [ ] allow ping for hostname
+- [ ] track time for each packet
+- [ ] support macOS compilation
+- [ ] create man page
+- [X] exceptions (include errno and handle)
+- [ ] print entire exception error
+- [ ] switch from icmp header to icmp packet
