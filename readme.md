@@ -25,7 +25,7 @@
 ## status
 - [X] ping ipv4 hosts
 - [X] listen for and filter responses
-- [ ] support ipv6
+- [X] support ipv6
 - [ ] command line
     - [ ] sanitization
     - [ ] show help logs
@@ -33,9 +33,9 @@
     - [ ] -c support
     - [ ] -D time stamp support
     - [ ] -V version
-- [ ] #ifdef if `<linux/icmp.h>` and `<linux/in.h>` are avaliable, `<netinet/ip_icmp.h>` if not
+- ~~[ ] #ifdef if `<linux/icmp.h>` and `<linux/in.h>` are avaliable, `<netinet/ip_icmp.h>` if not~~
 - [ ] ncurses support ??
-- [ ] fix pid issue
-- [ ] fix sendto and recvfrom
-- [ ] reduce use of cstrings
+- [X] fix pid issue
+- [X] fix sendto and recvfrom
+- [X] reduce use of cstrings
 - [ ] init structs inline
