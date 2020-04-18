@@ -46,6 +46,6 @@
 - ~~[ ] switch from icmp header to icmp packet~~
 - [ ] fix iterator issue
     - [ ] infinite loop for unspecified iterations
-- [ ] checksum for ipv6
-- [ ] entire packet should be -s size not only the data
-- [ ] correctly parse out from recv
+- ~~[ ] checksum for ipv6~~
+- [X] entire packet should be -s size not only the data
+- [X] correctly parse out from recv

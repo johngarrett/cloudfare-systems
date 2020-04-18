@@ -31,6 +31,12 @@ int main(int argc, char* argv[]) {
             std::cout << "Usage: " << argv[0] << " [options] {destination}\n";
             exit(0);
         }
+
+        if (result["size"].as<unsigned int>() > MAX_PACKET_SIZE) {
+            std::string error = "Packet size cannot exceed ";
+            error += std::to_string(MAX_PACKET_SIZE);
+            throw(std::invalid_argument(error));
+        }
         
         ping::Parameters p{ result["audio"].as<bool>(),
                             result["quiet"].as<bool>(),

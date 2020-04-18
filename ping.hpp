@@ -6,6 +6,7 @@
 
 class ping
 {
+    #define MAX_PACKET_SIZE 65506 
     public:
         struct Parameters {
             bool make_sound = false;
@@ -70,5 +71,5 @@ class ping
          * @param id the id attached to all outgoing packets
          */
         static unsigned short listen_for_reply(const Destination& d, const Parameters& p, int sock, unsigned short id);
-        static int32_t checksum(uint16_t *buf, int32_t len);
+        static uint16_t checksum(const void* data, size_t len);
 };

@@ -76,7 +76,7 @@ ping::PingResults ping::ping_destination(const Destination& destination, const P
         auto recieve_time = std::chrono::high_resolution_clock::now();
         
         std::chrono::duration<float, std::milli> elapsed_time = recieve_time - send_time;
-        if (!p.quiet) std::cout << "time elpased:" << elapsed_time.count() << "ms\n";
+        if (!p.quiet) std::cout << " time elpased:" << elapsed_time.count() << "ms\n";
 
         rtts.push_back(elapsed_time.count());
         std::this_thread::sleep_for(std::chrono::milliseconds(p.delay));
@@ -86,12 +86,14 @@ ping::PingResults ping::ping_destination(const Destination& destination, const P
             *std::max_element(rtts.begin(), rtts.end()),
             float(std::accumulate(rtts.cbegin(), rtts.cend(), 0)) / rtts.size()
         };
+
+    close(sock);
     return PingResults{num_recieved, iterator, stats};
 }
 
 void ping::send_imcp_echo_packet(const Destination& d, const Parameters& p, int sock, unsigned short seq, unsigned short id) {
-    unsigned int header_size = (d.type == IPV6 ? sizeof(icmp6_hdr) : sizeof(icmphdr));
-    unsigned int data_size = p.packet_size <= 65507 ? p.packet_size : 65507;
+    unsigned int header_size = d.type == IPV6 ? sizeof(icmp6_hdr) : sizeof(icmphdr);
+    unsigned int data_size = p.packet_size;
     
     char packet[header_size + data_size];
     memset(packet, 0, sizeof(packet));
@@ -101,6 +103,7 @@ void ping::send_imcp_echo_packet(const Destination& d, const Parameters& p, int 
         std::cout << "header size: " << header_size << "\tdata size: " << data_size << "\n";
     }
 
+    memset(packet_ptr + header_size, 'J', data_size);
     if (d.type == IPV6) {
         icmp6_hdr *hdr = (icmp6_hdr *) packet_ptr;
         hdr->icmp6_type = ICMP6_ECHO_REQUEST; // ICMP6 ECHO for out, ICMP6_ECHO_REPLY will come back to us
@@ -108,6 +111,7 @@ void ping::send_imcp_echo_packet(const Destination& d, const Parameters& p, int 
         hdr->icmp6_id = htons(id); // htons converts the unsigned integer destinationlong to network bye order
         hdr->icmp6_seq = seq; 
         hdr->icmp6_cksum = 0;//checksum((uint16_t *) pkt, sizeof(packet));
+        // when looking in wireshark, checksum is being created automatically???
        // memset(pkt->icmp6_dataun.icmp6_un_data8, p.ttl, sizeof(p.ttl));// = p.ttl;
     } else {
        icmphdr *pkt = (icmphdr *) packet_ptr; // everything inside icmphdr is an int or struct of ints
@@ -115,12 +119,12 @@ void ping::send_imcp_echo_packet(const Destination& d, const Parameters& p, int 
        pkt->code = 0; // code 0 = echo reply/req
        pkt->un.echo.id = htons(id); // htons converts the unsigned integer hostlong to network bye order
        pkt->un.echo.sequence = seq;
-       pkt->checksum = checksum((uint16_t *) pkt, header_size);
+       pkt->checksum = checksum(pkt, sizeof(packet));
     }
 
-    memset(packet_ptr + header_size, 'J', data_size);
+
     if(p.verbose) {
-       std::cout << "Packet created successfully.\n" << "The data is: " << *(packet_ptr + header_size) << "\n";
+        std::cout << "Packet created successfully.\n" << "The data is: " << *(packet_ptr + header_size) << "\n";
     }
 
     int bytes = sendto(sock, packet_ptr, header_size + data_size , 0 /*flags*/, d.get_sock_addr(), d.type == IPV6 ? sizeof(sockaddr_in6) : sizeof(sockaddr_in));
@@ -137,14 +141,15 @@ void ping::send_imcp_echo_packet(const Destination& d, const Parameters& p, int 
 unsigned short ping::listen_for_reply(const Destination& d, const Parameters& p, int sock, unsigned short id) {
     while (1) {
         // allegedly, recvfrom automatically trims the ipv6 header 
-        unsigned int header_size = (d.type == IPV6 ? sizeof(icmp6_hdr) : sizeof(icmphdr));
-        unsigned int data_size = p.packet_size <= 65507 ? p.packet_size : 65507;
+        unsigned int header_size = d.type == IPV6 ? sizeof(icmp6_hdr) : sizeof(icmphdr);
+        unsigned int data_size = p.packet_size;
     
-        char inbuf[header_size + data_size];
+       // char inbuf[header_size + data_size];
+        char inbuf[MAX_PACKET_SIZE];
         memset(inbuf, 0, sizeof(inbuf));
             
         int addrlen = d.type == IPV6 ? sizeof(sockaddr_in6) : sizeof(sockaddr_in);
-        int bytes = recvfrom(sock, inbuf, sizeof(inbuf), 0 /*flags*/, d.get_sock_addr(), (socklen_t *)&addrlen);
+        int bytes = recvfrom(sock, &inbuf, sizeof(inbuf), 0 /*flags*/, d.get_sock_addr(), (socklen_t *)&addrlen);
 
         if (bytes < 0) {
             if (p.verbose) std::cout << "[LISTEN] bytes found: " << bytes << "\n\twe expect a value > 0... continuing\n";
@@ -160,12 +165,14 @@ unsigned short ping::listen_for_reply(const Destination& d, const Parameters& p,
                 icmp6_hdr *pkt = (icmp6_hdr *)(iph); // at this point, inbuf + hlen points to the icmp header
                 int extracted_id = ntohs(pkt->icmp6_id); // converts unsigned int from network to destination byte order (opposite of the htons we did earlier! ish)
 
+                if (p.verbose) std::cout << "packet id: " << extracted_id << "\nexpected id: " << id << "\npacket checksum: " << pkt->icmp6_cksum << "\n";
+                if (p.verbose) std::cout << "packet type: " << pkt->icmp6_type << "\n";
+
                 if (pkt->icmp6_type == ICMP6_ECHO_REPLY) {
                     if (p.verbose) std::cout << "[LISTEN] packet type of ICMP6 Echo Reply found.\n";
-                    if (p.verbose) std::cout << "packet id: " << extracted_id << "\nexpected id: " << id << "\npacket checksum: " << pkt->icmp6_cksum << "\n";
 
                     if (!p.quiet) {
-                        std::cout << sizeof(inbuf) - header_size << " bytes from " << d.readable_address << ": icmp_seq=" << pkt->icmp6_seq << "\n";
+                        std::cout << header_size + data_size << " bytes from " << d.readable_address << ": icmp_seq=" << pkt->icmp6_seq;
                     }
 
                     return (extracted_id == id);
@@ -181,6 +188,8 @@ unsigned short ping::listen_for_reply(const Destination& d, const Parameters& p,
                             return 0;
                         }
                     }
+                } else if (p.verbose) {
+                    std::cout << "[LISTEN] Packet found was not an echo reply or DEST_UNREACH, it was: " << pkt->icmp6_type << "\n";
                 }
             }  else if (d.type == IPV4) {
                 iphdr *iph = (iphdr *)inbuf;
@@ -210,61 +219,34 @@ unsigned short ping::listen_for_reply(const Destination& d, const Parameters& p,
                             return 0;
                         }
                     }
-                }
+                } else if (p.verbose) {
+                    std::cout << "[LISTEN] Packet found was not an echo reply or DEST_UNREACH, it was: " << pkt->type << "\n";
             }
-            if (p.verbose) std::cout << "[LISTEN] we got a packet back but it wasnt a reply or an unreachable error...\n";
-            return 0;
         }
+    }
+    // begin waiting for time out TODO
 }
 
-int32_t ping::checksum(const Destination& d, const Parameters& p) {
-    /** TODO: chksm for icmpv6 and icmp4 (they differ)
-    int32_t nleft = len;
-    int32_t sum = 0;
-    uint16_t *w = buf;
-    uint16_t answer = 0;
+uint16_t ping::checksum(const void* data, size_t len) {
+    auto icmph = reinterpret_cast<const uint16_t*>(data);
+	uint16_t ret = 0;
+	uint32_t sum = 0;
+	uint16_t odd_byte;
 
-    while(nleft > 1)
-    {
-        sum += *w++;
-        nleft -= 2;
-    }
+    len = len % 2 == 0 ? len : len + 1; // checksum only works for even numbers
+	while (len > 1) {
+		sum += *icmph++;
+		len -= 2;
+	}
 
-    if(nleft == 1)
-    {
-        *(uint16_t *)(&answer) = *(uint8_t *)w;
-        sum += answer;
-    }
+	if (len == 1) {
+		*(uint8_t*)(&odd_byte) = * (uint8_t*)icmph;
+		sum += odd_byte;
+	}
 
-    sum = (sum >> 16) + (sum & 0xFFFF);
-    sum += (sum >> 16);
-    answer = ~sum;
+	sum =  (sum >> 16) + (sum & 0xffff);
+	sum += (sum >> 16);
+	ret =  ~sum;
 
-    return answer;
-    */
-    return 0;
-}
-int32_t ping::checksum(uint16_t *buf, int32_t len) {
-    int32_t nleft = len;
-    int32_t sum = 0;
-    uint16_t *w = buf;
-    uint16_t answer = 0;
-
-    while(nleft > 1)
-    {
-        sum += *w++;
-        nleft -= 2;
-    }
-
-    if(nleft == 1)
-    {
-        *(uint16_t *)(&answer) = *(uint8_t *)w;
-        sum += answer;
-    }
-
-    sum = (sum >> 16) + (sum & 0xFFFF);
-    sum += (sum >> 16);
-    answer = ~sum;
-
-    return answer;
+	return ret;
 }
