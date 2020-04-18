@@ -3,7 +3,6 @@
 #include <arpa/inet.h>
 #include <netinet/in.h> // sockaddr_in
 
-#include <iostream>
 
 class ping
 {
@@ -16,15 +15,17 @@ class ping
             int packet_quantity = -1;
             unsigned int packet_size = 64; 
             int ttl = 255;
-            unsigned short delay = 1;
+            unsigned short delay = 500;
         };
         static void start_ping(const std::string& destination, const Parameters& p);
     private:
         enum protocol { IPV4, IPV6 };
         struct Destination {
             public:
+                std::string readable_address;
                 protocol type;
                 Destination(std::string address) {
+                    readable_address = address;
                     if (inet_pton(AF_INET6, address.c_str(), &addr.sin6_addr) == 1) { 
                         type = IPV6;
                         addr.sin6_family = AF_INET6;
@@ -45,10 +46,14 @@ class ping
         };
 
         struct PingResults {
-            unsigned short num_sent;
+            struct rtt_statistics {
+                float min;
+                float max;
+                float avg;
+            };
             unsigned short num_recv;
-            float total_time_ms;
-            float avg_rtt;
+            unsigned short num_sent;
+            PingResults::rtt_statistics stats;
         };
 
         static int32_t checksum(const Destination& d, const Parameters& p);

@@ -35,12 +35,17 @@
 - [X] fix sendto and recvfrom
 - [X] reduce use of cstrings
 - [ ] conform to c++ conventions (camel case)
-- [ ] add data to packets
+- [X] add data to packets
 - [ ] impliment ttl for ipv6 packets
 - [ ] allow ping for hostname
-- [ ] track time for each packet
+- [X] track time for each packet
 - [ ] support macOS compilation
 - [ ] create man page
 - [X] exceptions (include errno and handle)
 - [ ] print entire exception error
-- [ ] switch from icmp header to icmp packet
+- ~~[ ] switch from icmp header to icmp packet~~
+- [ ] fix iterator issue
+    - [ ] infinite loop for unspecified iterations
+- [ ] checksum for ipv6
+- [ ] entire packet should be -s size not only the data
+- [ ] correctly parse out from recv

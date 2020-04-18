@@ -16,7 +16,7 @@ int main(int argc, char* argv[]) {
             ("v,verbose", "print all the information we can", cxxopts::value<bool>()->default_value("false"))
             ("s,size", "set the packet size to send", cxxopts::value<unsigned int>()->default_value("64"))
             ("t,ttl", "set the IP Time to Live", cxxopts::value<int>()->default_value("255"))
-            ("d,delay", "time (in seconds) to wait between pings", cxxopts::value<unsigned short>()->default_value("1"));
+            ("d,delay", "time (in seconds) to wait between pings", cxxopts::value<unsigned short>()->default_value("500"));
 
         auto result = options.parse(argc, argv);
 
