@@ -12,11 +12,11 @@
 ---
 ## scratch pad
 - commands from ping
-    - `-a` audible ping
+    - ~~`-a` audible ping~~
     - `-c` count, the amount of ping packets to send
     - `-D` print timestamps
     - `-h` help
-    - `-m` mark
+    - ~~`-m` mark~~
     - `-q` queit, only show output at the end
     - `-p` packet size
     - `-V` version
