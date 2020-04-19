@@ -67,9 +67,9 @@ Ping::PingResults Ping::ping_destination(const Destination& dest,
 
         rtts.push_back(elapsed_time.count());
         std::this_thread::sleep_for(std::chrono::milliseconds(params.delay));
-        iterator++;
 
         if (iterator == params.packet_quantity - 1) break;
+        iterator++;
     }
     PingResults::rtt_statistics stats {
             *std::min_element(rtts.begin(), rtts.end()),
@@ -78,6 +78,7 @@ Ping::PingResults Ping::ping_destination(const Destination& dest,
         };
 
     close(sock);
+    iterator++;
     return PingResults{num_recieved, iterator, 0, stats};
 }
 
@@ -153,82 +154,84 @@ unsigned short Ping::listen_for_reply(const Destination& d, const Parameters& p,
             continue;
         }
 
-            if (bytes < int(sizeof(inbuf))) {
-                if (p.verbose) std::cout << "[LISTEN] Incorrect read bytes! For type " << d.type << "\n\t... continuing\n";
+        if (bytes < int(sizeof(inbuf))) {
+            if (p.verbose) std::cout << "[LISTEN] Incorrect read bytes! For type " << d.type << "\n\t... continuing\n";
+        }
+
+        if (d.type == IPV6) {
+            ip6_hdr *iph = reinterpret_cast<ip6_hdr *>(inbuf);
+            icmp6_hdr *pkt = reinterpret_cast<icmp6_hdr *>(iph);
+            int extracted_id = ntohs(pkt->icmp6_id);
+
+            if (p.verbose) {
+                std::cout << "[LISTEN]\n\tpacket id: " << extracted_id << "\n\texpected id: " << id
+                    << "\n\tpacket checksum: " << pkt->icmp6_cksum
+                    << "\n\tpacket type: " << pkt->icmp6_type << "\n";
             }
 
-            if (d.type == IPV6) {
-                ip6_hdr *iph = reinterpret_cast<ip6_hdr *>(inbuf);
-                icmp6_hdr *pkt = reinterpret_cast<icmp6_hdr *>(iph);
-                int extracted_id = ntohs(pkt->icmp6_id);
+            if (pkt->icmp6_type == ICMP6_ECHO_REPLY) {
+                if (p.verbose) std::cout << "[LISTEN] packet type of ICMP6 Echo Reply found.\n";
 
-                if (p.verbose) {
-                    std::cout << "[LISTEN]\n\tpacket id: " << extracted_id << "\n\texpected id: " << id
-                        << "\n\tpacket checksum: " << pkt->icmp6_cksum
-                        << "\n\tpacket type: " << pkt->icmp6_type << "\n";
-
-                if (pkt->icmp6_type == ICMP6_ECHO_REPLY) {
-                    if (p.verbose) std::cout << "[LISTEN] packet type of ICMP6 Echo Reply found.\n";
-
-                    if (!p.quiet) {
-                        std::cout << "[LISTEN] : " << header_size + data_size << " bytes from "
-                            << d.readable_address << ": icmp_seq=" << pkt->icmp6_seq;
-                    }
-
-                    return (extracted_id == id);
-                } else if (pkt->icmp6_type == ICMP6_DST_UNREACH) {
-                    if (p.verbose) std::cout << "[LISTEN] packet type of ICMP6_DEST_UNREACH\n";
-
-                    int offset = sizeof(ip6_hdr) + sizeof(icmp6_hdr) + sizeof(ip6_hdr);
-                    if (((bytes) - offset) == sizeof(icmp6_hdr)) {
-                        icmp6_hdr *packet = reinterpret_cast<icmp6_hdr *>(inbuf + offset);
-                        if (ntohs(packet->icmp6_id) == id) {
-                            if (p.verbose) std::cout << "\tID's match, destination is unreachable\n";
-                            return 0;
-                        }
-                    }
-                } else if (pkt->icmp6_code >= 0 && pkt->icmp6_code <= 8) {
-                    if (!p.quiet) std::cout << "[LISTEN] Could not send packet to host. Destination may be unreachable or there may be an issue with your connection\n";
-                    return 0;
-                } else if (p.verbose) {
-                    std::cout << "[LISTEN] Packet found was not an echo reply or DEST_UNREACH, it was: " << pkt->icmp6_type << "\n";
+                if (!p.quiet) {
+                    std::cout << "[LISTEN] : " << header_size + data_size << " bytes from "
+                        << d.readable_address << ": icmp_seq=" << pkt->icmp6_seq;
                 }
-            }  else if (d.type == IPV4) {
-                iphdr *iph = reinterpret_cast<iphdr *>(inbuf);
-                int hlen = (iph->ihl << 2);  // shift left 2
-                bytes -= hlen;  // subtract the header from the bytes, we only care about the icmp info
-                icmphdr *pkt = reinterpret_cast<icmphdr *>(inbuf + hlen);  // at this point, inbuf + hlen points to the icmp header
-                int extracted_id = ntohs(pkt->un.echo.id);
 
-                if (pkt->type == ICMP_ECHOREPLY) {
-                    if (p.verbose) {
-                        std::cout << "[LISTEN] packet type of ICMP Echo Rely found.\n"
-                            << "packet id: " << extracted_id << "\nexpected id: " << id
-                            << "\npacket checksum: " << pkt->checksum << "\n";
-                    }
-                    if (!p.quiet) {
-                        std::cout << sizeof(inbuf) << " bytes from " << d.readable_address << ": icmp_seq=" << pkt->un.echo.sequence << "\n";
-                    }
-                    return (extracted_id == id);
-                } else if (pkt->type == ICMP_DEST_UNREACH) {
-                    std::cout << "[LISTEN] packet type of ICMP_DEST_UNREACH\n";
+                return (extracted_id == id);
+            } else if (pkt->icmp6_type == ICMP6_DST_UNREACH) {
+                if (p.verbose) std::cout << "[LISTEN] packet type of ICMP6_DEST_UNREACH\n";
 
-                    int offset = sizeof(iphdr) + sizeof(icmphdr);
-                    if (((bytes + hlen) - offset) == sizeof(icmphdr)) {
-                        icmphdr *p = reinterpret_cast<icmphdr *>(inbuf + offset);  // extract the original icmp packet
-                        if (ntohs(p->un.echo.id) == id) {
-                            std::cout << "\tID's match, destination is unreachable\n";
-                            return 0;
-                        }
+                int offset = sizeof(ip6_hdr) + sizeof(icmp6_hdr) + sizeof(ip6_hdr);
+                if (((bytes) - offset) == sizeof(icmp6_hdr)) {
+                    icmp6_hdr *packet = reinterpret_cast<icmp6_hdr *>(inbuf + offset);
+                    if (ntohs(packet->icmp6_id) == id) {
+                        if (p.verbose) std::cout << "\tID's match, destination is unreachable\n";
+                        return 0;
                     }
-                } else if (pkt->type == 3 && (pkt->code > 0 && pkt->code >= 15)) {  // codes 1 - 15 are uncreachable for TYPE 3
-                    if (!p.quiet) std::cout << "[LISTEN] Could not send packet to host. Destination may be unreachable or there may be an issue with your connection\n";
-                    return 0;
-                } else if (p.verbose) {
-                    std::cout << "[LISTEN] Packet found was not an echo reply or DEST_UNREACH, it was: " << pkt->type << "\n";
+                    if (p.verbose) std::cout << "[LISTEN] That packet did not belong to our destination\n";
+                }
+            } else if (pkt->icmp6_code >= 0 && pkt->icmp6_code <= 8) {
+                if (!p.quiet) std::cout << "[LISTEN] Could not send packet to host. Destination may be unreachable or there may be an issue with your connection\n";
+                return 0;
+            } else if (p.verbose) {
+                std::cout << "[LISTEN] Packet found was not an echo reply or DEST_UNREACH, it was: " << pkt->icmp6_type << "\n";
+            }
+        } else if (d.type == IPV4) {
+            iphdr *iph = reinterpret_cast<iphdr *>(inbuf);
+            int hlen = (iph->ihl << 2);  // shift left 2
+            bytes -= hlen;  // subtract the header from the bytes, we only care about the icmp info
+            icmphdr *pkt = reinterpret_cast<icmphdr *>(inbuf + hlen);  // at this point, inbuf + hlen points to the icmp header
+            int extracted_id = ntohs(pkt->un.echo.id);
+
+            if (pkt->type == ICMP_ECHOREPLY) {
+                if (p.verbose) {
+                    std::cout << "[LISTEN] packet type of ICMP Echo Rely found.\n"
+                        << "packet id: " << extracted_id << "\nexpected id: " << id
+                        << "\npacket checksum: " << pkt->checksum << "\n";
+                }
+                if (!p.quiet) {
+                    std::cout << sizeof(inbuf) << " bytes from " << d.readable_address << ": icmp_seq=" << pkt->un.echo.sequence;
+                }
+                return (extracted_id == id);
+            } else if (pkt->type == ICMP_DEST_UNREACH) {
+                std::cout << "[LISTEN] packet type of ICMP_DEST_UNREACH\n";
+
+                int offset = sizeof(iphdr) + sizeof(icmphdr);
+                if (((bytes + hlen) - offset) == sizeof(icmphdr)) {
+                    icmphdr *unreach_pkt = reinterpret_cast<icmphdr *>(inbuf + offset);  // extract the original icmp packet
+                    if (ntohs(unreach_pkt->un.echo.id) == id) {
+                        std::cout << "\tID's match, destination is unreachable\n";
+                        return 0;
+                    }
+                    if (p.verbose) std::cout << "[LISTEN] That packet did not belong to our destination\n";
+                }
+            } else if (pkt->type == 3 && (pkt->code > 0 && pkt->code >= 15)) {  // codes 1 - 15 are uncreachable for TYPE 3
+                if (!p.quiet) std::cout << "[LISTEN] Could not send packet to host. Destination may be unreachable or there may be an issue with your connection\n";
+                return 0;
+            } else if (p.verbose) {
+                std::cout << "[LISTEN] Packet found was not an echo reply or DEST_UNREACH, it was: " << pkt->type << "\n";
             }
         }
-    }
     }
 }
 

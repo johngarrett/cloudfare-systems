@@ -16,10 +16,9 @@ class Ping {
 
  public:
         struct Parameters {
-            bool make_sound = false;
             bool quiet = false;
             bool verbose = false;
-            bool show_timestamps = true;
+            bool show_timestamps = false;
             int packet_quantity = -1;  // -1 yeilds a loop until a termination command is sent
             unsigned int packet_size = 64;
             int rtt = 255;
@@ -39,7 +38,7 @@ class Ping {
             std::string to_string() {
                 std::stringstream ostream;
                 ostream << num_sent << " sent packets, " << num_recv << " recieved packets."
-                    << std::setprecision(2) << (static_cast<float>(num_sent - num_recv))/num_sent * 100 << "% packet loss."
+                    << std::setprecision(2) << (static_cast<float>(num_sent - num_recv))/num_sent * 100 << "% packet loss.\n"
                     << "time: " << std::setprecision(2) << std::fixed << elapsed_time << "ms\n"
                     << "rtt min/avg/max: " << std::setprecision(2) << stats.min
                     << "/" << std::setprecision(2) << stats.avg

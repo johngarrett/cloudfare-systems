@@ -8,12 +8,10 @@ int main(int argc, char* argv[]) {
         cxxopts::Options options(argv[0]);
 
         options.add_options()
-            ("a,audio", "audible ping",
-                 cxxopts::value<bool>()->default_value("false"))
             ("c,count","the amount of ping packets to send",
-                cxxopts::value<unsigned int>()->default_value("5"))
+                cxxopts::value<int>()->default_value("-1"))
             ("T,timestamps", "print time stamps",
-                cxxopts::value<bool>()->default_value("true"))
+                cxxopts::value<bool>()->default_value("false"))
             ("h,help", "display the help menu")
             ("q,quiet", "only show output summary",
                 cxxopts::value<bool>()->default_value("false"))
@@ -45,11 +43,10 @@ int main(int argc, char* argv[]) {
             throw(std::invalid_argument(error));
         }
 
-        Ping::Parameters p{ result["audio"].as<bool>(),
-                            result["quiet"].as<bool>(),
+        Ping::Parameters p{ result["quiet"].as<bool>(),
                             result["verbose"].as<bool>(),
                             result["timestamps"].as<bool>(),
-                            int(result["count"].as<unsigned int>()),
+                            result["count"].as<int>(),
                             result["size"].as<unsigned int>(),
                             result["rtt"].as<int>(),
                             result["delay"].as<unsigned short>() };
