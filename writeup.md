@@ -1,9 +1,19 @@
-- what i want to do in the future
-    - talk about neighbor advertisements
-    - type 13/14 icmp packets with code 0 are for "timestamp request/replies"
-    - IPV4 filters
-    ```
- if (dest.type == IPV6) {
+## Table of Contents
+1. [Overview](#overview)
+2. [Future](#future)
+3. [Documentation](#documentation)
+    - [Ping.cpp](#ping.cpp - discussed from top to bottom)
+    - [Ping.h] (#ping.h - discussed from top to bottom)
+
+---
+## Overview
+Here's my attempt to reimpliment ping in C++. I've spent more time working with C but I thought this would benefit from an object oriented design. The majority of functions implimented are designed functionally and, thus, static. There were a few issues that are discussed in the [future section](#future) that I plan to continually work on. 
+--- 
+## Future 
+- `setsockopt()`
+    I managed to set socket options for ICMP6 using the following code:
+    ```cpp
+     if (dest.type == IPV6) {
         icmp6_filter filter;
         ICMP6_FILTER_SETBLOCKALL(&filter);
         ICMP6_FILTER_SETPASS(ICMP6_DST_UNREACH, &filter);
@@ -14,18 +24,16 @@
             if (!params.quiet) std::cout << "Could not set hoplimit for ICMP6... we will still continue\n";
         }
     }
-
-```
-    - `int sock_result = setsockopt(sock, IPPROTO_IP, IP_TTL, (char *) &params.ttl, sizeof(params.ttl)); // TODO: reinsert filters`
-
-
-                } else if (pkt->icmp6_type == 136) {
-                    std::cout << "We were given an advert for another neighbor";
-                    std::cout << pkt->icmp6_dataun.icmp6_un_data32[0];
-                    std::cout << ntohs(pkt->icmp6_dataun.icmp6_un_data32[0]);
-                    std::cout << d.get_sock_addr();
-                }
-
+    ```
+    However, with the libraries I was using, I couldn't do the same for ICMP4 packets.
+- no macOS compilation
+- handling neighbor advertisements/requests
+    Only rarely did I get these packets back but, when I did, I couldn't handle them. Wireshark shows that they contain an address pointing to the destination you _should_ send data to.
+- Embedding time stamps in the packets
+    - type 13/14 icmp4 packets with code 0 are for "timestamp request/replies"
+    - Windows' library contains structs with these as field memebers but they don't appear on linux
+---
+## Documentation
 #### ping.cpp - discussed from top to bottom
 
 `void ping::start_ping( . . . )`
@@ -104,3 +112,22 @@ It was hard following the conditional cases throughout `ping.cpp` that handled b
 
 `struct PingResults`
 The more advanced user will interface with this. There is a nested struct for tracking the RTT statistics and a function to output the results to string.
+
+---
+## Sources
+Non conclusive but these were the resources and websites I kept refrencing.
+- Linux man pages
+- /usr/include/netinet/*
+- /usr/include/sys/socket.h
+- https://www.geeksforgeeks.org/socket-programming-cc/
+- https://www.gta.ufrj.br/ensino/eel878/sockets/sockaddr_inman.html
+- http://man7.org/linux/man-pages/man2/setuid.2.html
+- https://linux.die.net/man/2/setsockopt
+- http://www.skrenta.com/rt/man/raw.4.html
+- https://en.wikipedia.org/wiki/Internet_Control_Message_Protocol
+- https://www.cymru.com/Documents/icmp-messages.html
+- https://developer.lsst.io/cpp/api-docs.html
+- https://www.geeksforgeeks.org/bitwise-operators-in-c-cpp/
+- http://long.ccaba.upc.edu/long/045Guidelines/eva/ipv6.html
+- https://tools.ietf.org/html/rfc2292#section-3.2
+- https://labs.apnic.net/?p=1057
