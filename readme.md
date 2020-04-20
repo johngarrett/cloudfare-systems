@@ -1,5 +1,5 @@
 ## about
-- written in c++
+- written in C++, compiled and run on Arch Linux 5.6.3. See `writeup.md` for documentation and overview.
 ## requirements
 - [X] accept a hostname or IP address as terminal arguments
 - [X] send ICMP echo requests in an infinite loop
@@ -34,15 +34,15 @@
 - [X] fix pid issue
 - [X] fix sendto and recvfrom
 - [X] reduce use of cstrings
-- [ ] conform to c++ conventions (camel case)
+- [X] conform to c++ conventions (camel case)
 - [X] add data to packets
 - [ ] impliment ttl for ipv6 packets
-- [ ] allow ping for hostname
+- [X] allow ping for hostname
 - [X] track time for each packet
 - [ ] support macOS compilation
 - [ ] create man page
 - [X] exceptions (include errno and handle)
-- [ ] print entire exception error
+- [X] print entire exception error
 - ~~[ ] switch from icmp header to icmp packet~~
 - [ ] fix iterator issue
     - [ ] infinite loop for unspecified iterations
