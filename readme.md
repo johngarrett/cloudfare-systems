@@ -1,5 +1,6 @@
 ## about
 - written in C++, compiled and run on Arch Linux 5.6.3. See `writeup.md` for documentation and overview.
+    - specifically, `g++ *.cpp *.h -Wall -std=c++14 -O3`
 ## requirements
 - [X] accept a hostname or IP address as terminal arguments
 - [X] send ICMP echo requests in an infinite loop
